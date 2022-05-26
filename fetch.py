@@ -79,6 +79,9 @@ def yahoo(tickers, data='historical'):
             dates = [el[:12] for el in dates]
             dates = [datetime.strptime(el, '%b %d, %Y').strftime('%Y-%m-%d') for el in dates]
             ticker_data.append(dates)
+    
+    if len(ticker_data) == 1:
+        ticker_data = ticker_data[0]
         
     return ticker_data
 
