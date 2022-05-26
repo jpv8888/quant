@@ -23,7 +23,7 @@ dates = list(NVDA['Date'].values)
 # %%
 
 earnings_idx = []
-for date in earnings[3:]:
+for date in earnings[1:]:
     earnings_idx.append(dates.index(date))
     
 traces = []
@@ -93,7 +93,33 @@ for j in range(len(traces)):
         
     if dir_test == dir_predict:
         correct += 1
-        
+# %%
+      
+
+traces_arr = np.array(traces[1:])  
+train = traces_arr
+
+
+trainX = train[:,:23]
+trainY = train[:,23]
+testX = traces[0]
+testY = 178.7
+
+# reshape input to be [samples, time steps, features]
+trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1], 1))
+testX = np.reshape(testX, (1, 23, 1))
+
+# create and fit the LSTM network
+model = Sequential()
+model.add(LSTM(4, input_shape=(23, 1)))
+model.add(Dense(1))
+model.compile(loss='mean_squared_error', optimizer='adam')
+model.fit(trainX, trainY, epochs=100, batch_size=1, verbose=2)
+
+
+# make predictions
+trainPredict = model.predict(trainX)
+testPredict = model.predict(testX)
 # %%
 
 ci = 1.96*(0.25/88)**(1/2)
