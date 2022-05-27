@@ -15,10 +15,13 @@ from keras.layers import LSTM
 
 
 NVDA = fetch.yahoo('NVDA')
+SPY = fetch.yahoo('SPY')
 earnings = fetch.yahoo('NVDA', data='earnings')
 
 price = list(NVDA['Close'].values)
 dates = list(NVDA['Date'].values)
+SPY_price = list(SPY['Close'].values)
+SPY_dates = list(SPY['Date'].values)
 
 # %%
 
@@ -26,12 +29,23 @@ earnings_idx = []
 for date in earnings[1:]:
     earnings_idx.append(dates.index(date))
     
+spy_earnings_idx = []
+for date in earnings[1:]:
+    spy_earnings_idx.append(dates.index(date))
+    
 traces = []
 for idx in earnings_idx:
     trace = price[idx-22:idx+22]
     center = price[idx-22]
     trace = trace/center
     traces.append(trace)
+    
+spy_traces = []
+for idx in earnings_idx:
+    trace = SPY_price[idx-22:idx+22]
+    center = SPY_price[idx-22]
+    trace = trace/center
+    spy_traces.append(trace)
     
 for trace in traces:
     plt.plot(trace)
@@ -41,6 +55,7 @@ plt.vlines(22, 0.4, 3.5, ls='--')
 # %%
 
 traces_arr = np.array(traces)
+spy_traces_arr = np.array(spy_traces)
 
 # split into train and test sets
 # train_size = int(len(traces_arr) * 0.67)
@@ -56,19 +71,30 @@ for j in range(len(traces)):
     
     train = np.delete(traces_arr, j, axis=0)
     test = traces_arr[j,:]
+    train_spy = np.delete(spy_traces_arr, j, axis=0)
+    test_spy = spy_traces_arr[j,:]
+    
 
     trainX = train[:,:23]
+    spy_train_x = train_spy[:,:23]
     trainY = train[:,23]
     testX = test[:23]
+    testX = np.reshape(testX, (23, 1))
+    testX_spy = test_spy[:23]
+    testX_spy = np.reshape(testX_spy, (23, 1))
+    testX = np.concatenate((testX, testX_spy), axis=1)
     testY = test[23]
+    testX = np.reshape(testX, (1, 23, 2))
     
     # reshape input to be [samples, time steps, features]
     trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1], 1))
-    testX = np.reshape(testX, (1, 23, 1))
+    train_spy_X = np.reshape(spy_train_x, (spy_train_x.shape[0], spy_train_x.shape[1], 1))
+    trainX = np.concatenate((trainX, train_spy_X), axis=2)
+    # testX = np.reshape(testX, (1, 23, 1))
     
     # create and fit the LSTM network
     model = Sequential()
-    model.add(LSTM(4, input_shape=(23, 1)))
+    model.add(LSTM(4, input_shape=(23, 2)))
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
     model.fit(trainX, trainY, epochs=100, batch_size=1, verbose=2)
@@ -122,7 +148,7 @@ trainPredict = model.predict(trainX)
 testPredict = model.predict(testX)
 # %%
 
-ci = 1.96*(0.25/88)**(1/2)
+ci = 1.96*(0.25/91)**(1/2)
     
 # %%
     
