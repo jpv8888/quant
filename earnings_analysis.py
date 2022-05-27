@@ -9,9 +9,11 @@ import fetch
 import matplotlib.pyplot as plt
 import numpy as np
 
+from datetime import date, datetime
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import LSTM
+
 
 
 NVDA = fetch.yahoo('NVDA')
@@ -25,37 +27,60 @@ SPY_dates = list(SPY['Date'].values)
 
 # %%
 
-earnings_idx = []
-for date in earnings[1:]:
-    earnings_idx.append(dates.index(date))
+def extract_traces(earnings, dates, data):
     
-spy_earnings_idx = []
-for date in earnings[1:]:
-    spy_earnings_idx.append(dates.index(date))
+    today = date.today()
+    earnings_idx = []
+    for DT in earnings:
+        if datetime.strptime(DT, "%Y-%m-%d").date() < today:
+            earnings_idx.append(dates.index(DT))
     
-traces = []
-for idx in earnings_idx:
-    trace = price[idx-22:idx+22]
-    center = price[idx-22]
-    trace = trace/center
-    traces.append(trace)
+    traces = []
+    for idx in earnings_idx:
+        trace = data[idx-22:idx+2]
+        center = data[idx-22]
+        trace = trace/center
+        traces.append(trace)
     
-spy_traces = []
-for idx in earnings_idx:
-    trace = SPY_price[idx-22:idx+22]
-    center = SPY_price[idx-22]
-    trace = trace/center
-    spy_traces.append(trace)
-    
-for trace in traces:
-    plt.plot(trace)
+    return traces
 
-plt.vlines(22, 0.4, 3.5, ls='--')
+NVDA_traces = extract_traces(earnings, dates, price)
+SPY_traces = extract_traces(earnings, SPY_dates, SPY_price)
+    
+    
+# %%
+
+# earnings_idx = []
+# for date in earnings[1:]:
+#     earnings_idx.append(dates.index(date))
+    
+# spy_earnings_idx = []
+# for date in earnings[1:]:
+#     spy_earnings_idx.append(dates.index(date))
+    
+# traces = []
+# for idx in earnings_idx:
+#     trace = price[idx-22:idx+22]
+#     center = price[idx-22]
+#     trace = trace/center
+#     traces.append(trace)
+    
+# spy_traces = []
+# for idx in earnings_idx:
+#     trace = SPY_price[idx-22:idx+22]
+#     center = SPY_price[idx-22]
+#     trace = trace/center
+#     spy_traces.append(trace)
+    
+# for trace in traces:
+#     plt.plot(trace)
+
+# plt.vlines(22, 0.4, 3.5, ls='--')
 
 # %%
 
-traces_arr = np.array(traces)
-spy_traces_arr = np.array(spy_traces)
+NVDA_traces = np.array(NVDA_traces)
+SPY_traces = np.array(SPY_traces)
 
 # split into train and test sets
 # train_size = int(len(traces_arr) * 0.67)
@@ -63,9 +88,21 @@ spy_traces_arr = np.array(spy_traces)
 # train, test = traces_arr[0:train_size,:], traces_arr[train_size:len(traces_arr),:]
 # print(len(train), len(test))
 
+def remove_index(traces_list, idx):
+    train = []
+    test = []
+    for traces in traces_list:
+        train.append(np.delete(traces, idx, axis=0))
+        test.append(traces[idx,:])
+    
+    return[train, test]
+
+[train, test] = remove_index([NVDA_traces, SPY_traces], 0)
+        
+
 correct = 0
 
-for j in range(len(traces)):
+for j in range(len(NVDA_traces)):
     
     print(j)
     
