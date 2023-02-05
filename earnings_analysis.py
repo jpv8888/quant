@@ -8,6 +8,7 @@ Created on Sun May 22 13:57:55 2022
 import fetch
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
 
 from datetime import date, datetime
 from keras.models import Sequential
@@ -16,18 +17,21 @@ from keras.layers import LSTM
 
 
 
-NVDA = fetch.yahoo('NVDA')
-SPY = fetch.yahoo('SPY')
+NVDA, SPY = fetch.yahoo(['NVDA', 'SPY'])
 earnings = fetch.yahoo('NVDA', data='earnings')
 
 price = list(NVDA['Close'].values)
 dates = list(NVDA['Date'].values)
+volume = list(NVDA['Volume'].values)
 SPY_price = list(SPY['Close'].values)
 SPY_dates = list(SPY['Date'].values)
 
 # %%
 
-def extract_traces(earnings, dates, data):
+# standard is 21 (21 trading days in a month on average), so time_steps = 22
+# for the day after
+
+def extract_traces(earnings, dates, data, time_steps=22):
     
     today = date.today()
     earnings_idx = []
@@ -37,8 +41,8 @@ def extract_traces(earnings, dates, data):
     
     traces = []
     for idx in earnings_idx:
-        trace = data[idx-22:idx+2]
-        center = data[idx-22]
+        trace = data[idx-time_steps+2:idx+2]
+        center = data[idx-time_steps+2]
         trace = trace/center
         traces.append(trace)
     
@@ -46,6 +50,16 @@ def extract_traces(earnings, dates, data):
 
 NVDA_traces = extract_traces(earnings, dates, price)
 SPY_traces = extract_traces(earnings, SPY_dates, SPY_price)
+volume_traces = extract_traces(earnings, dates, volume)
+
+NVDA_traces = np.array(NVDA_traces)
+SPY_traces = np.array(SPY_traces)
+volume_traces = np.array(volume_traces)
+
+# for trace in NVDA_traces[0:10,:]:
+#     plt.plot(trace)
+
+# plt.vlines(22, 0.4, 2, ls='--')
     
     
 # %%
@@ -79,8 +93,8 @@ SPY_traces = extract_traces(earnings, SPY_dates, SPY_price)
 
 # %%
 
-NVDA_traces = np.array(NVDA_traces)
-SPY_traces = np.array(SPY_traces)
+
+
 
 # split into train and test sets
 # train_size = int(len(traces_arr) * 0.67)
@@ -98,43 +112,97 @@ def remove_index(traces_list, idx):
     return[train, test]
 
 [train, test] = remove_index([NVDA_traces, SPY_traces], 0)
+
+def split_xy(data):
+    train, test = data
+    
+    train_samples = train[0].shape[0]
+    time_steps = train[0].shape[1]
+    
+    reshapedX = []
+    reshapedY = []
+    
+    for feature in train:
+        featureX = feature[:,:time_steps-1]
+        featureY = feature[:,time_steps-1]
+        reshapedX.append(np.reshape(featureX, (train_samples, time_steps-1, 1)))
+        reshapedY.append(np.reshape(featureY, (train_samples, 1, 1)))
+    
+    trainX = np.concatenate(reshapedX, axis=2)
+    trainY = np.concatenate(reshapedY, axis=2)
+    trainY = trainY[:,:,0]
+    
+    test_samples = 1
+    
+    reshapedX = []
+    reshapedY = []
+    
+    for feature in test:
+        featureX = feature[:time_steps-1]
+        featureY = feature[time_steps-1]
+        reshapedX.append(np.reshape(featureX, (test_samples, time_steps-1, 1)))
+        reshapedY.append(np.reshape(featureY, (test_samples, 1, 1)))
+        
+    testX = np.concatenate(reshapedX, axis=2)
+    testY = np.concatenate(reshapedY, axis=2)
+    testY = testY[:,:,0]
+    
+    return [trainX, trainY, testX, testY]
+    
+test2 = split_xy([train, test])
+# %%
+    
+    
+NVDA_traces = NVDA_traces[-80:,:]
+SPY_traces = SPY_traces[-80:,:]
+        
+    
         
 
 correct = 0
-
+acc_over_time = []
+accs = []
+result = []
 for j in range(len(NVDA_traces)):
     
     print(j)
     
-    train = np.delete(traces_arr, j, axis=0)
-    test = traces_arr[j,:]
-    train_spy = np.delete(spy_traces_arr, j, axis=0)
-    test_spy = spy_traces_arr[j,:]
+    [train, test] = remove_index([NVDA_traces, SPY_traces], j)
+    
+    [trainX, trainY, testX, testY] = split_xy([train, test])
+    
+    # train = np.delete(traces_arr, j, axis=0)
+    # test = traces_arr[j,:]
+    # train_spy = np.delete(spy_traces_arr, j, axis=0)
+    # test_spy = spy_traces_arr[j,:]
     
 
-    trainX = train[:,:23]
-    spy_train_x = train_spy[:,:23]
-    trainY = train[:,23]
-    testX = test[:23]
-    testX = np.reshape(testX, (23, 1))
-    testX_spy = test_spy[:23]
-    testX_spy = np.reshape(testX_spy, (23, 1))
-    testX = np.concatenate((testX, testX_spy), axis=1)
-    testY = test[23]
-    testX = np.reshape(testX, (1, 23, 2))
+    # trainX = train[:,:23]
+    # spy_train_x = train_spy[:,:23]
+    # trainY = train[:,23]
+    # testX = test[:23]
+    # testX = np.reshape(testX, (23, 1))
+    # testX_spy = test_spy[:23]
+    # testX_spy = np.reshape(testX_spy, (23, 1))
+    # testX = np.concatenate((testX, testX_spy), axis=1)
+    # testY = test[23]
+    # testX = np.reshape(testX, (1, 23, 2))
     
-    # reshape input to be [samples, time steps, features]
-    trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1], 1))
-    train_spy_X = np.reshape(spy_train_x, (spy_train_x.shape[0], spy_train_x.shape[1], 1))
-    trainX = np.concatenate((trainX, train_spy_X), axis=2)
+    # # reshape input to be [samples, time steps, features]
+    # trainX = np.reshape(trainX, (trainX.shape[0], trainX.shape[1], 1))
+    # train_spy_X = np.reshape(spy_train_x, (spy_train_x.shape[0], spy_train_x.shape[1], 1))
+    # trainX = np.concatenate((trainX, train_spy_X), axis=2)
     # testX = np.reshape(testX, (1, 23, 1))
-    
+    n_features = trainX.shape[2]
+    n_time_steps = trainX.shape[1]
     # create and fit the LSTM network
     model = Sequential()
-    model.add(LSTM(4, input_shape=(23, 2)))
+    model.add(LSTM(8, return_sequences=True, input_shape=(n_time_steps, n_features)))
+    model.add(LSTM(8))
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
-    model.fit(trainX, trainY, epochs=100, batch_size=1, verbose=2)
+    callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3)
+    model.fit(trainX, trainY, epochs=100, batch_size=1, verbose=2, callbacks=[callback])
     
     
     # make predictions
@@ -156,6 +224,12 @@ for j in range(len(NVDA_traces)):
         
     if dir_test == dir_predict:
         correct += 1
+        result.append(1)
+    else:
+        result.append(0)
+    
+    print(correct/(j+1))
+    acc_over_time.append(correct/(j+1))
 # %%
       
 
